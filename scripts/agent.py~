@@ -1,0 +1,19 @@
+#!/usr/bin/env python  
+import rospy
+import geometry_msgs.msg
+def run():
+
+    rospy.init_node('agent')
+
+    rate = rospy.Rate(5) # 5hz
+    rospy.Publisher('other_agent_poses', geometry_msgs.msg.PoseArray, queue_size=10)
+    rospy.Subscriber('other_agent_poses', geometry_msgs.msg.PoseArray)
+    while not rospy.is_shutdown():
+        rospy.logwarn('this garbage shows that agent is running')
+        rate.sleep()
+
+if __name__ == '__main__':
+    try:
+        run()
+    except rospy.ROSInterruptException:
+        pass

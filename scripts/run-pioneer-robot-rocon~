@@ -1,0 +1,102 @@
+#!/bin/bash
+
+export HOSTNAME
+
+echo "Launching gateway..."
+roslaunch pioneer_rocon_test pioneer_gateway.launch &
+pid=$!
+sleep 5s
+
+echo "Connecting to RosAria..."
+rosrun rosaria RosAria &
+pid="$! $pid"
+sleep 3s
+
+echo "Launching publishers..."
+#rosrun pioneer_test pioneer3dx_tf_broadcaster &
+#pid="$! $pid"
+
+rosrun pioneer_test pioneer3dx_odometry_publisher &
+pid="$! $pid"
+
+roslaunch rplidar_ros rplidar.launch &
+pid="$! $pid"
+
+rosrun pioneer_test laser_tf_broadcaster &
+pid="$! $pid"
+
+rosrun pioneer_test rplidar_laser_publisher &
+pid="$! $pid"
+
+rosrun pioneer_test rplidar_laser_republisher &
+pid="$! $pid"
+
+sleep 3s
+
+echo "Launching gmapping..."
+rosrun gmapping slam_gmapping scan:=/laserScan _map_update_interval:=1.0 &
+pid="$! $pid"
+
+echo "Launching navigation stack..."
+roslaunch pioneer_2dnav move_base.launch &
+pid="$! $pid"
+
+sleep 3s
+
+echo "Launching rviz..."
+rosrun rviz rviz -d "$(rospack find pioneer_test)/pioneer_test_rviz_config.rviz" &
+pid="$! $pid"
+
+sleep 3s
+
+echo "Launching pioneer controller..."
+rosparam load "$(rospack find pioneer_test)/pioneer_controller_params.yaml" pioneer_test &
+
+sleep 1s
+
+rosrun pioneer_test pioneer3dx_pid_controller &
+pid="$! $pid"
+
+echo "Waypoint commander..."
+rosparam load "$(rospack find simple_navigation_goals)/initial_goal.yaml" simple_navigation_goals &
+
+sleep 1s
+
+rosrun simple_navigation_goals publish_base_link_goal &
+pid="$! $pid"
+rosrun simple_navigation_goals base_link_navigation_client &
+pid="$! $pid"
+
+rosrun simple_navigation_goals publish_map_goal &
+pid="$! $pid"
+rosrun simple_navigation_goals map_navigation_client &
+pid="$! $pid"
+
+
+echo "Launching leg detector"
+rosrun leg_detector leg_detector scan:=/laserScan $(rospack find leg_detector)/config/trained_leg_detector.yaml &
+pid="$! $pid"
+
+echo "Launching POI state publisher"
+rosrun nn_control_input_filter poi_state_publisher &
+pid="$! $pid"
+
+echo  "Launching decision making bit"
+rosrun pioneer_rocon_test agent.py &
+pid="$! $pid"
+
+rosrun pioneer_rocon_test position_rebroadcaster.py &
+pid="$! $pid"
+
+sleep 5s
+
+echo "Launching flipper"
+rosrun pioneer_rocon_test flipper.py -s /base_link_goal -s /map_goal -s /other_agent_poses -s /quadrant_values -p /adjusted_pose &
+pid="$! $pid"
+
+rosbag record -a &
+pid="$! $pid"
+
+trap "echo Killing all processes.; kill -2 $pid; exit" SIGINT SIGTERM
+
+sleep 24h
